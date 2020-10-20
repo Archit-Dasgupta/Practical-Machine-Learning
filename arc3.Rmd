@@ -1,0 +1,108 @@
+---
+title: "Accelerometers Data Analysis"
+author: "Archit Dasgupta"
+date: "10/20/2020"
+output: html_document
+---
+
+## Brief Summary of the project
+
+Using various devices nowadays that contain accelerometers we can get accurate telemetry and data on how people workout.With this project we want to use data of 6 participants from accelerometers attached to various parts of their body and equipments while they workout. 
+
+
+##Preprocessing of Data 
+
+Loading training and testing sets via the datasets given to us and then we divide the training set furthur into training and testing sets.
+
+```{r DataLoading, message = FALSE}
+library(caret)
+setwd("C:/Users/MAHE/Documents/Archit/R progs/Practical-Machine-Learning")
+trainURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+trainin <- read.csv(url(trainURL))
+testin <- read.csv(url(testURL))
+label<- createDataPartition(trainin$classe, p = 0.7, list = FALSE)
+trainb <- trainin[label, ]
+testb <- trainin[-label, ]
+```
+
+We now remove NA variable and also the variables that dont have any variance (0 variance) from the data set 
+
+```{r DataCleaning}
+NonZero <- nearZeroVar(trainb)
+trainb <- trainb[ ,-NonZero]
+testb <- testb[ ,-NonZero]
+label<- apply(trainb, 2, function(x) mean(is.na(x))) > 0.95
+trainb <- trainb[, -which(label, label== FALSE)]
+testb <- testb[, -which(label, label == FALSE)]
+trainb <- trainb[ , -(1:5)]
+testb <- testb[ , -(1:5)]
+```
+
+Now we can operate with 54 meaningful variables.
+
+## Coorelation Plot via Exploratory analysis
+
+We now look at the dependence of these variables on each other using a correlation plot. 
+
+```{r CorrelationPlot, fig.width=12, fig.height=8}
+library(corrplot)
+corrMat <- cor(trainb[,-54])
+corrplot(corrMat, method = "color", type = "lower", tl.cex = 0.8, tl.col = rgb(0,0,0))
+```
+
+From the plot above we can now see that the darker area has more ccorelation than others.
+
+## Selecting Prediction Models
+
+We use Decision Tree, Random Forest and Generalized Boosted model, methods to model our training set and hence select the one with the most accuracy to predict the output variables in the testing set.
+For better visualzation a confusion matrix is also plotted below.
+
+### Method 1: Decision Tree
+
+```{r DecisionTree, message = FALSE, warning = FALSE, fig.width=18, fig.height=10}
+library(rpart)
+library(rpart.plot)
+library(rattle)
+set.seed(13908)
+modelD <- rpart(classe ~ ., data = trainb, method = "class")
+fancyRpartPlot(modelD)
+predictD <- predict(modelD, testb, type = "class")
+confMatrD <- confusionMatrix(predictD, testb$classe)
+confMatrD
+```
+
+### Method 2:Random Forest
+
+```{r RandomForest, message = FALSE}
+library(caret)
+set.seed(13908)
+control <- trainControl(method = "cv", number = 3, verboseIter=FALSE)
+modelR <- train(classe ~ ., data = trainb, method = "rf", trControl = control)
+modelR$finalModel
+predictR <- predict(modelR, testb)
+confMatrR <- confusionMatrix(predictR, testb$classe)
+confMatrR
+```
+
+### Method 3: Generalized Boosted Model
+
+```{r GBM, message = FALSE}
+library(caret)
+set.seed(13908)
+control <- trainControl(method = "repeatedcv", number = 5, repeats = 1, verboseIter = FALSE)
+modelGB <- train(classe ~ ., data = trainb, trControl = control, method = "gbm", verbose = FALSE)
+modelGB$finalModel
+predictGB <- predict(modelGB, testb)
+confMatrGB <- confusionMatrix(predictGB, testb$classe)
+confMatrGB
+```
+
+We see the method 2 has the highest accuracy hence Random forest is chosen.
+
+## Prediction of Test set outputs
+
+```{r TestSetPrediction, messages = FALSE}
+predictR <- predict(modelR, testin)
+predictR
+```
